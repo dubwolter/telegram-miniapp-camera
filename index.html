@@ -163,7 +163,7 @@
                     <!-- Здесь будет текст с кодом -->
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button class="btn btn-secondary" id="cancelDeleteBtn" data-bs-dismiss="modal">Отмена</button>
                     <button id="confirmDeleteBtn" class="btn btn-danger">Удалить</button>
                 </div>
             </div>
@@ -216,13 +216,13 @@
             scannedCodes.forEach((item, index) => {
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
-                <td>${item.value}</td>
-                <td>${item.name || ""}</td>
-                <td>${item.type}</td>
-                <td class="text-center">
-                    <button class="btn btn-sm btn-outline-success copy-btn" data-index="${index}" title="Скопировать"><i class="bi bi-clipboard"></i></button>
-                    <button class="btn btn-sm btn-outline-danger delete-btn" data-index="${index}" title="Удалить"><i class="bi bi-trash"></i></button>
-                </td>`;
+                        <td>${item.value}</td>
+                        <td>${item.name || ""}</td>
+                        <td>${item.type}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-success copy-btn" data-index="${index}" title="Скопировать"><i class="bi bi-clipboard"></i></button>
+                            <button class="btn btn-sm btn-outline-danger delete-btn" data-index="${index}" title="Удалить"><i class="bi bi-trash"></i></button>
+                        </td>`;
                 tableBody.appendChild(tr);
             });
 
@@ -243,6 +243,8 @@
                 btn.addEventListener("click", () => {
                     deleteIndex = btn.getAttribute("data-index");
                     deleteModalBody.textContent = `Вы уверены, что хотите удалить код "${scannedCodes[deleteIndex].value}"?`;
+                    //остановить сканирование
+                    html5QrcodeScanner.pause()
                     confirmDeleteModal.show();
                 });
             });
@@ -263,9 +265,13 @@
                 localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
                 renderTable();
                 confirmDeleteModal.hide();
+                //активировать сканирование
+                html5QrcodeScanner.resume()
                 deleteIndex = null;
             }
         });
+        // активация сканнера после отмены при удалении
+        document.getElementById("cancelDeleteBtn").addEventListener("click", () => { html5QrcodeScanner.resume() });
 
         function updateModalCodePreview(value) { codePreview.textContent = value; }
 
