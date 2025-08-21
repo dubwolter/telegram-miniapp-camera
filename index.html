@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,53 +13,90 @@
             background-color: #f8f9fa;
         }
 
-        #reader {
-            width: 100%;
-            max-width: 500px;
-            margin: auto;
-        }
-
         .container {
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
             align-items: center;
-            min-height: 100vh;
             padding-top: 20px;
         }
 
-        table {
+        #reader-container {
+            width: 100%;
+            max-width: 500px;
+            aspect-ratio: 4/3;
+            border: 2px solid #0d6efd;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            background-color: black;
+            margin-bottom: 15px;
+        }
+
+        #reader {
+            width: 100%;
+            height: 100%;
+        }
+
+        #scanner-frame {
+            position: absolute;
+            border: 3px solid #0d6efd;
+            width: 250px;
+            height: 250px;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            border-radius: 12px;
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(13,110,253,0.6);
+        }
+
+        .table-wrapper {
             max-width: 500px;
             width: 100%;
+            max-height: 250px;
+            overflow-y: auto;
             margin-top: 15px;
-            table-layout: fixed; /* фиксированная ширина столбцов */
-            word-wrap: break-word; /* перенос длинного текста */
+        }
+
+        table {
+            width: 100%;
+            table-layout: fixed;
         }
 
             table td, table th {
                 overflow: hidden;
-                text-overflow: ellipsis; /* добавляет ... для длинных строк */
-                white-space: nowrap; /* чтобы текст был в одной строке, убираем перенос */
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
 
-        /* Добавим контейнер с горизонтальным скроллом для маленьких экранов */
-        .table-responsive {
-            width: 100%;
-            overflow-x: auto;
+        #clearAllBtn {
+            margin-top: 10px;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1055;
         }
     </style>
-    <title>Barcode/QR Scanner</title>
+    <title>Friendly Barcode/QR Scanner</title>
 </head>
 <body>
     <div class="container">
-        <h3>📷 Scan QR / Barcode</h3>
-        <div id="reader"></div>
+        <h3 class="mb-3 text-primary"><i class="bi bi-camera-fill"></i> Сканер штрихкодов</h3>
 
-        <div class="table-responsive">
+        <div id="reader-container">
+            <div id="reader"></div>
+            <div id="scanner-frame"></div>
+        </div>
+
+        <div class="table-wrapper">
             <table class="table table-striped table-bordered table-hover shadow-sm" id="codesTable">
                 <thead class="table-primary">
                     <tr>
                         <th>Значение</th>
+                        <th>Название</th>
                         <th>Тип кода</th>
                         <th>Действия</th>
                     </tr>
@@ -71,28 +108,75 @@
         <button class="btn btn-danger mt-2" id="clearAllBtn"><i class="bi bi-trash"></i> Очистить таблицу</button>
     </div>
 
+    <!-- Modal для добавления имени к коду -->
+    <div class="modal fade" id="addCodeModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Новый штрихкод</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Значение сканированного кода:</p>
+                    <input type="text" class="form-control mb-2" id="scannedValue" readonly>
+                    <label for="codeName">Имя/Описание:</label>
+                    <input type="text" class="form-control" id="codeName" placeholder="Введите имя">
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary" id="saveCodeBtn">Сохранить</button>
+                    <button type="button" class="btn btn-success" id="saveAsCodeBtn">Сохранить как <span id="codePreview"></span></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast уведомление -->
+    <div class="toast-container">
+        <div id="addToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="toastBody">Код добавлен!</div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const tableBody = document.querySelector("#codesTable tbody");
         const clearAllBtn = document.getElementById("clearAllBtn");
+        const toastEl = document.getElementById("addToast");
+        const toast = new bootstrap.Toast(toastEl);
+        const toastBody = document.getElementById("toastBody");
+
+        const addCodeModalEl = document.getElementById('addCodeModal');
+        const addCodeModal = new bootstrap.Modal(addCodeModalEl);
+        const scannedValueInput = document.getElementById('scannedValue');
+        const codeNameInput = document.getElementById('codeName');
+        const saveCodeBtn = document.getElementById('saveCodeBtn');
+        const saveAsCodeBtn = document.getElementById('saveAsCodeBtn');
+        const codePreview = document.getElementById('codePreview');
 
         let scannedCodes = JSON.parse(localStorage.getItem("scannedCodes") || "[]");
+        let pendingCode = null;
 
-        // Отобразить таблицу при загрузке
         function renderTable() {
             tableBody.innerHTML = "";
             scannedCodes.forEach((item, index) => {
                 const tr = document.createElement("tr");
                 tr.innerHTML = `
-          <td>${item.value}</td>
-          <td>${item.type}</td>
-          <td>
-            <button class="btn btn-sm btn-outline-danger" data-index="${index}"><i class="bi bi-trash"></i></button>
-          </td>`;
+                <td>${item.value}</td>
+                <td>${item.name || ""}</td>
+                <td>${item.type}</td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-success copy-btn" data-index="${index}" title="Скопировать"><i class="bi bi-clipboard"></i></button>
+                    <button class="btn btn-sm btn-outline-danger delete-btn" data-index="${index}" title="Удалить"><i class="bi bi-trash"></i></button>
+                </td>`;
                 tableBody.appendChild(tr);
             });
-            // Добавляем обработчики для кнопок удаления строки
-            document.querySelectorAll("#codesTable button").forEach(btn => {
+
+            document.querySelectorAll(".delete-btn").forEach(btn => {
                 btn.addEventListener("click", () => {
                     const idx = btn.getAttribute("data-index");
                     scannedCodes.splice(idx, 1);
@@ -100,9 +184,19 @@
                     renderTable();
                 });
             });
+
+            document.querySelectorAll(".copy-btn").forEach(btn => {
+                btn.addEventListener("click", async () => {
+                    const idx = btn.getAttribute("data-index");
+                    try {
+                        await navigator.clipboard.writeText(scannedCodes[idx].value);
+                        toastBody.textContent = `Код "${scannedCodes[idx].value}" скопирован!`;
+                        toast.show();
+                    } catch (err) { console.error(err); }
+                });
+            });
         }
 
-        // Очистка всей таблицы
         clearAllBtn.addEventListener("click", () => {
             if (confirm("Очистить всю таблицу?")) {
                 scannedCodes = [];
@@ -111,33 +205,70 @@
             }
         });
 
-        // Инициализация html5-qrcode
+        function updateModalCodePreview(value) { codePreview.textContent = value; }
+
+        saveCodeBtn.addEventListener("click", () => {
+            if (pendingCode) {
+                const name = codeNameInput.value.trim();
+                scannedCodes.push({ value: pendingCode.value, type: pendingCode.type, name });
+                localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
+                renderTable();
+                addCodeModal.hide();
+                codeNameInput.value = "";
+                toastBody.textContent = `Код "${pendingCode.value}" добавлен!`;
+                toast.show();
+                pendingCode = null;
+            }
+        });
+
+        saveAsCodeBtn.addEventListener("click", () => {
+            if (pendingCode) {
+                scannedCodes.push({ value: pendingCode.value, type: pendingCode.type, name: pendingCode.value });
+                localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
+                renderTable();
+                addCodeModal.hide();
+                toastBody.textContent = `Код "${pendingCode.value}" добавлен!`;
+                toast.show();
+                pendingCode = null;
+            }
+        });
+
+        addCodeModalEl.addEventListener('shown.bs.modal', () => {
+            codeNameInput.focus(); // фокус на поле ввода
+        });
+
         window.addEventListener("load", () => {
             const html5QrcodeScanner = new Html5Qrcode("reader");
-            let scanning = true;
+            let canScan = true;
 
             html5QrcodeScanner.start(
                 { facingMode: "environment" },
-                {
-                    fps: 10,
-                    qrbox: { width: 250, height: 250 },
-                    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
-                },
+                { fps: 10, qrbox: { width: 250, height: 250 }, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
                 (decodedText, decodedResult) => {
-                    if (scanning) {
-                        scanning = false; // обработка только одного кадра за раз
-                        const codeData = { value: decodedText, type: decodedResult.result.format.formatName || "unknown" };
-                        // проверяем, есть ли уже такой код
+                    if (canScan) {
+                        canScan = false;
+                        const codeData = {
+                            value: decodedText,
+                            type: decodedResult.result.format.formatName || "unknown"
+                        };
+
                         if (!scannedCodes.some(c => c.value === codeData.value)) {
-                            scannedCodes.push(codeData);
-                            localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
-                            renderTable();
+
+                            pendingCode = codeData;
+                            scannedValueInput.value = codeData.value;
+                            codeNameInput.value = "";
+                            updateModalCodePreview(codeData.value);
+                            addCodeModal.show();
                         }
-                        // разрешаем следующий скан через 1 сек
-                        setTimeout(() => { scanning = true; }, 1000);
+                        else {
+                            toastBody.textContent = `Код "${codeData.value}" уже добавлен!`;
+                            toast.show();
+                        }
+
+                        setTimeout(() => { canScan = true; }, 1500);
                     }
                 },
-                (errorMessage) => { /* можно игнорировать мелкие ошибки */ }
+                (errorMessage) => { }
             ).catch(err => alert("Не удалось получить доступ к камере: " + err));
 
             renderTable();
