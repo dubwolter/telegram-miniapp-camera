@@ -114,16 +114,22 @@ function addCode(code) {
 }
 
 function startScanner() {
+    const scannerElement = document.getElementById('scanner');
     Quagga.init({
-        inputStream : {
-          name : "Live",
-          type : "LiveStream",
-          target: document.querySelector('#scanner'),
-          constraints: { facingMode: "environment" },
+        inputStream: {
+            name: "Live",
+            type: "LiveStream",
+            target: scannerElement,
+            constraints: {
+                width: { min: 640 },
+                height: { min: 480 },
+                facingMode: "environment"
+            },
         },
-        decoder : {
-          readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader","upc_e_reader"]
-        }
+        decoder: {
+            readers: ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader","upc_e_reader"]
+        },
+        locate: true
     }, function(err) {
         if (err) {
             console.error(err);
@@ -143,6 +149,7 @@ function startScanner() {
         }
     });
 }
+
 
 // События
 saveCodeBtn.addEventListener('click', () => {
