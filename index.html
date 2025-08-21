@@ -1,292 +1,98 @@
-<!doctype html>
-<html lang="ru">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Mini App: Камера</title>
-  <!-- Telegram WebApp SDK -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <!-- Bootstrap -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
-  <script defer src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <style>
-    :root {
-      /* Fallbacks; will be overridden by WebApp theme when available */
-      --tg-bg: #0e1621;
-      --tg-text: #ffffff;
-      --tg-hint: #9aa4af;
-      --tg-btn: #2ea6ff;
-      --tg-btn-text: #ffffff;
-    }
-    html, body { height: 100%; }
-    body {
-      background: var(--tg-bg);
-      color: var(--tg-text);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-    .app {
-      max-width: 920px;
-      margin: 0 auto;
-      padding: 16px;
-    }
-    .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); }
-    .btn-primary { background-color: var(--tg-btn); border-color: var(--tg-btn); color: var(--tg-btn-text); }
-    .btn-primary:hover { filter: brightness(1.1); }
-    video, canvas { width: 100%; border-radius: 16px; background: #000; }
-    .video-wrap { position: relative; }
-    .overlay-tip { position:absolute; right:8px; bottom:8px; background: rgba(0,0,0,0.55); color:#fff; padding:4px 8px; border-radius: 12px; font-size:12px; }
-    .form-select, .form-control { background: rgba(255,255,255,0.06); color: var(--tg-text); border: 1px solid rgba(255,255,255,0.1); }
-    .form-select:focus, .form-control:focus { box-shadow: 0 0 0 .2rem rgba(46,166,255,.25); }
-    .hint { color: var(--tg-hint); }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MiniApp Barcode Scanner</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  #scanner-container {
+    width: 100%;
+    max-width: 500px;
+    margin: auto;
+  }
+  video, canvas {
+    width: 100%;
+  }
+  ul { max-height: 200px; overflow-y: auto; }
+</style>
 </head>
-<body>
-  <div class="app">
-    <h1 class="h4 mb-3">Доступ к камере (Telegram Mini App)</h1>
-    <p class="hint mb-4">Нажмите «Запросить доступ», подтвердите разрешение браузера/Telegram, затем сделайте фото. Работает в WebView Telegram (iOS/Android) и в десктоп‑браузере.</p>
-
-    <div class="card p-3 mb-3">
-      <div class="row g-3 align-items-end">
-        <div class="col-12 col-md-6">
-          <label class="form-label">Выбор камеры</label>
-          <select id="cameraSelect" class="form-select" disabled></select>
-        </div>
-        <div class="col-6 col-md-3 d-grid">
-          <button id="requestBtn" class="btn btn-primary">Запросить доступ</button>
-        </div>
-        <div class="col-6 col-md-3 d-grid">
-          <button id="switchBtn" class="btn btn-outline-light" disabled>Поменять камеру</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="row g-3">
-      <div class="col-12 col-lg-7">
-        <div class="card p-2">
-          <div class="video-wrap">
-            <video id="video" playsinline autoplay muted></video>
-            <div id="tip" class="overlay-tip d-none">Стрим неактивен</div>
-          </div>
-        </div>
-      </div>
-      <div class="col-12 col-lg-5">
-        <div class="card p-3 h-100 d-flex flex-column">
-          <div class="d-grid gap-2 mb-3">
-            <button id="snapBtn" class="btn btn-primary" disabled>Сделать фото</button>
-            <button id="stopBtn" class="btn btn-outline-light" disabled>Остановить камеру</button>
-          </div>
-          <canvas id="canvas" class="mb-2" height="0"></canvas>
-          <div class="d-grid gap-2 mt-auto">
-            <a id="downloadLink" class="btn btn-success disabled" download="snapshot.png" href="#">Скачать фото</a>
-            <button id="sendToTG" class="btn btn-outline-success" disabled>Отправить в Telegram</button>
-          </div>
-          <small class="hint mt-2">Фото сохраняется локально как PNG. Кнопка «Отправить в Telegram» отправит картинку обратно в бота через <code>WebApp.sendData</code> (как base64).</small>
-        </div>
-      </div>
-    </div>
-
-    <div class="card p-3 mt-3">
-      <details>
-        <summary>Отладка</summary>
-        <pre id="log" class="mt-2 small text-wrap"></pre>
-      </details>
-    </div>
+<body class="p-3">
+<div class="container text-center">
+  <h3>Barcode Scanner MiniApp</h3>
+  <div id="scanner-container">
+    <div id="scanner"></div>
   </div>
+  <button id="start-btn" class="btn btn-primary mt-3">Start Scanning</button>
+  <h5 class="mt-4">Scanned Codes:</h5>
+  <ul id="codes-list" class="list-group"></ul>
+</div>
 
-  <script>
-    // --- Telegram WebApp theme integration ---
-    (function initTelegram() {
-      const tg = window.Telegram?.WebApp;
-      if (!tg) return;
-      try {
-        tg.ready();
-        tg.expand();
-        const tp = tg.themeParams || {};
-        const root = document.documentElement;
-        if (tp.bg_color) root.style.setProperty('--tg-bg', tp.bg_color);
-        if (tp.text_color) root.style.setProperty('--tg-text', tp.text_color);
-        if (tp.hint_color) root.style.setProperty('--tg-hint', tp.hint_color);
-        if (tp.button_color) root.style.setProperty('--tg-btn', tp.button_color);
-        if (tp.button_text_color) root.style.setProperty('--tg-btn-text', tp.button_text_color);
-      } catch (e) { /* ignore */ }
-    })();
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+const codesList = document.getElementById('codes-list');
+const startBtn = document.getElementById('start-btn');
+const savedCodes = JSON.parse(localStorage.getItem('scannedCodes') || '[]');
 
-    // --- Camera logic ---
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const cameraSelect = document.getElementById('cameraSelect');
-    const requestBtn = document.getElementById('requestBtn');
-    const switchBtn  = document.getElementById('switchBtn');
-    const snapBtn    = document.getElementById('snapBtn');
-    const stopBtn    = document.getElementById('stopBtn');
-    const downloadLink = document.getElementById('downloadLink');
-    const sendToTG   = document.getElementById('sendToTG');
-    const tip        = document.getElementById('tip');
-    const logEl      = document.getElementById('log');
+// Функция для отображения сохранённых штрихкодов
+function renderCodes() {
+    codesList.innerHTML = '';
+    savedCodes.forEach(code => {
+        const li = document.createElement('li');
+        li.className = 'list-group-item';
+        li.textContent = code;
+        codesList.appendChild(li);
+    });
+}
 
-    let currentStream = null;
-    let devices = [];
-    let currentDeviceIndex = 0;
-
-    function log(...args) {
-      console.log(...args);
-      logEl.textContent += args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' ') + '\n';
+// Добавление нового штрихкода в список и localStorage
+function addCode(code) {
+    if (!savedCodes.includes(code)) {
+        savedCodes.push(code);
+        localStorage.setItem('scannedCodes', JSON.stringify(savedCodes));
+        renderCodes();
     }
+}
 
-    async function listCameras() {
-      try {
-        const all = await navigator.mediaDevices.enumerateDevices();
-        devices = all.filter(d => d.kind === 'videoinput');
-        cameraSelect.innerHTML = '';
-        devices.forEach((d, i) => {
-          const opt = document.createElement('option');
-          opt.value = d.deviceId;
-          opt.textContent = d.label || `Камера ${i + 1}`;
-          cameraSelect.appendChild(opt);
+// Инициализация QuaggaJS
+function startScanner() {
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        Quagga.init({
+            inputStream : {
+              name : "Live",
+              type : "LiveStream",
+              target: document.querySelector('#scanner'),
+              constraints: {
+                facingMode: "environment"
+              },
+            },
+            decoder : {
+              readers : ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "upc_reader", "upc_e_reader"]
+            }
+        }, function(err) {
+            if (err) {
+                console.error(err);
+                alert("Camera not accessible!");
+                return;
+            }
+            Quagga.start();
         });
-        cameraSelect.disabled = devices.length === 0;
-        switchBtn.disabled = devices.length < 2;
-        if (devices.length > 0) {
-          currentDeviceIndex = 0;
-          cameraSelect.selectedIndex = 0;
-        }
-      } catch (e) {
-        log('enumerateDevices error', e);
-      }
+
+        Quagga.onDetected(data => {
+            addCode(data.codeResult.code);
+        });
+    } else {
+        alert("Camera not supported on this device.");
     }
+}
 
-    async function startStream(deviceId) {
-      stopStream();
-      const constraints = deviceId ? { video: { deviceId: { exact: deviceId } }, audio: false } : { video: { facingMode: 'environment' }, audio: false };
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        currentStream = stream;
-        video.srcObject = stream;
-        await video.play();
-        tip.classList.add('d-none');
-        snapBtn.disabled = false;
-        stopBtn.disabled = false;
-        sendToTG.disabled = false;
-        await listCameras();
-      } catch (e) {
-        log('getUserMedia error', e.name || e, e.message || '');
-        tip.textContent = 'Нет доступа к камере';
-        tip.classList.remove('d-none');
-        snapBtn.disabled = true;
-        stopBtn.disabled = true;
-        sendToTG.disabled = true;
-      }
-    }
+startBtn.addEventListener('click', () => {
+    startBtn.disabled = true;
+    startScanner();
+});
 
-    function stopStream() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(t => t.stop());
-        currentStream = null;
-      }
-      video.srcObject = null;
-      tip.textContent = 'Стрим неактивен';
-      tip.classList.remove('d-none');
-      snapBtn.disabled = true;
-      stopBtn.disabled = true;
-    }
-
-    function snapPhoto() {
-      if (!video.videoWidth) return;
-      const w = video.videoWidth;
-      const h = video.videoHeight;
-      canvas.width = w; canvas.height = h; // keep full resolution
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(video, 0, 0, w, h);
-      const dataUrl = canvas.toDataURL('image/png');
-      downloadLink.href = dataUrl;
-      downloadLink.classList.remove('disabled');
-      return dataUrl;
-    }
-
-    async function switchCamera() {
-      if (devices.length < 2) return;
-      currentDeviceIndex = (currentDeviceIndex + 1) % devices.length;
-      cameraSelect.selectedIndex = currentDeviceIndex;
-      await startStream(devices[currentDeviceIndex].deviceId);
-    }
-
-    // --- Events ---
-    requestBtn.addEventListener('click', async () => {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        alert('Ваш браузер не поддерживает getUserMedia. Откройте в приложении Telegram или современном браузере.');
-        return;
-      }
-      requestBtn.disabled = true;
-      await startStream();
-      await listCameras();
-      requestBtn.textContent = 'Доступ получен';
-    });
-
-    switchBtn.addEventListener('click', switchCamera);
-
-    cameraSelect.addEventListener('change', async (e) => {
-      const i = e.target.selectedIndex;
-      currentDeviceIndex = i;
-      await startStream(devices[i]?.deviceId);
-    });
-
-    snapBtn.addEventListener('click', () => {
-      const b64 = snapPhoto();
-      if (!b64) return;
-    });
-
-    stopBtn.addEventListener('click', () => {
-      stopStream();
-    });
-
-    sendToTG.addEventListener('click', () => {
-      try {
-        const b64 = canvas.toDataURL('image/png');
-        if (!b64) return alert('Сначала сделайте фото');
-        const payload = { type: 'photo', mime: 'image/png', data: b64 };
-        if (window.Telegram?.WebApp?.sendData) {
-          window.Telegram.WebApp.sendData(JSON.stringify(payload));
-        } else {
-          alert('WebApp API недоступно вне Telegram. Откройте через кнопку веб‑приложения в боте.');
-        }
-      } catch (e) { log('sendData error', e); }
-    });
-
-    // iOS/Safari: восстановить размеры canvas после rotate
-    window.addEventListener('resize', () => {
-      if (video.videoWidth) {
-        canvas.height = 0; // force repaint
-      }
-    });
-
-    // Показать подсказку, если autoplay запрещен
-    video.addEventListener('play', () => { tip.classList.add('d-none'); });
-    video.addEventListener('pause', () => { tip.classList.remove('d-none'); });
-
-  </script>
-
-  <!--
-  =========================
-  Как развернуть Mini App
-  =========================
-  1) Разместите этот файл на https:// (обязательно HTTPS) или в Telegram Mini Apps Hosting.
-  2) В боте подключите WebApp: используйте reply_markup с web_app.url на этот индекс.
-  3) Откройте в Telegram. Нажмите «Запросить доступ». Разрешите доступ к камере.
-  4) Сделайте фото и скачайте или отправьте его обратно в бота (через sendData).
-
-  Пример бэкенда для бота (Node.js/Telegraf):
-    bot.on('message', (ctx) => {
-      if (ctx.webAppData?.data) {
-        const payload = JSON.parse(ctx.webAppData.data);
-        // payload.data — dataURL PNG; можно сохранить файл
-      }
-    });
-
-  Замечания:
-  • Разрешение камеры зависит от устройства. Мы сохраняем оригинальное videoWidth/videoHeight для лучшего качества.
-  • Если нужно строго задать заднюю камеру — используем facingMode:'environment', но на некоторых устройствах это лишь подсказка.
-  • Для сканирования QR/штрихкодов вместо фото можно подключить библиотеку html5-qrcode.
-  -->
+// Отобразить уже сохранённые штрихкоды при загрузке
+renderCodes();
+</script>
 </body>
 </html>
