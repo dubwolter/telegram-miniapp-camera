@@ -13,89 +13,72 @@
             background-color: #f8f9fa;
         }
 
+        #reader {
+            width: 100%;
+            max-width: 500px;
+            margin: auto;
+        }
+
         .container {
             display: flex;
             flex-direction: column;
+            justify-content: flex-start;
             align-items: center;
+            min-height: 100vh;
             padding-top: 20px;
-        }
-
-        #reader-container {
-            width: 100%;
-            max-width: 500px;
-            aspect-ratio: 4/3;
-            border: 2px solid #0d6efd;
-            border-radius: 12px;
-            overflow: hidden;
-            position: relative;
-            background-color: black;
-            margin-bottom: 15px;
-        }
-
-        #reader {
-            width: 100%;
-            height: 100%;
         }
 
         table {
             max-width: 500px;
             width: 100%;
             margin-top: 15px;
+            table-layout: fixed; /* фиксированная ширина столбцов */
+            word-wrap: break-word; /* перенос длинного текста */
         }
 
-        .toast-container {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 1055;
+            table td, table th {
+                overflow: hidden;
+                text-overflow: ellipsis; /* добавляет ... для длинных строк */
+                white-space: nowrap; /* чтобы текст был в одной строке, убираем перенос */
+            }
+
+        /* Добавим контейнер с горизонтальным скроллом для маленьких экранов */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
         }
     </style>
-    <title>Friendly Barcode/QR Scanner</title>
+    <title>Barcode/QR Scanner</title>
 </head>
 <body>
     <div class="container">
-        <h3 class="mb-3 text-primary"><i class="bi bi-camera-fill"></i> Сканер штрихкодов</h3>
+        <h3>📷 Scan QR / Barcode</h3>
+        <div id="reader"></div>
 
-        <div id="reader-container">
-            <div id="reader"></div>
+        <div class="table-responsive">
+            <table class="table table-striped table-bordered table-hover shadow-sm" id="codesTable">
+                <thead class="table-primary">
+                    <tr>
+                        <th>Значение</th>
+                        <th>Тип кода</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
-
-        <table class="table table-striped table-bordered table-hover shadow-sm" id="codesTable">
-            <thead class="table-primary">
-                <tr>
-                    <th>Значение</th>
-                    <th>Тип кода</th>
-                    <th>Действия</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
 
         <button class="btn btn-danger mt-2" id="clearAllBtn"><i class="bi bi-trash"></i> Очистить таблицу</button>
     </div>
 
-    <!-- Toast уведомление -->
-    <div class="toast-container">
-        <div id="addToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
-            <div class="d-flex">
-                <div class="toast-body" id="toastBody">Код добавлен!</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-            </div>
-        </div>
-    </div>
-
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const tableBody = document.querySelector("#codesTable tbody");
         const clearAllBtn = document.getElementById("clearAllBtn");
-        const toastEl = document.getElementById("addToast");
-        const toast = new bootstrap.Toast(toastEl);
-        const toastBody = document.getElementById("toastBody");
 
         let scannedCodes = JSON.parse(localStorage.getItem("scannedCodes") || "[]");
 
-        // Отобразить таблицу
+        // Отобразить таблицу при загрузке
         function renderTable() {
             tableBody.innerHTML = "";
             scannedCodes.forEach((item, index) => {
@@ -108,7 +91,7 @@
           </td>`;
                 tableBody.appendChild(tr);
             });
-            // Кнопки удаления строки
+            // Добавляем обработчики для кнопок удаления строки
             document.querySelectorAll("#codesTable button").forEach(btn => {
                 btn.addEventListener("click", () => {
                     const idx = btn.getAttribute("data-index");
@@ -128,37 +111,33 @@
             }
         });
 
+        // Инициализация html5-qrcode
         window.addEventListener("load", () => {
             const html5QrcodeScanner = new Html5Qrcode("reader");
-            let canScan = true; // флаг паузы между сканами
+            let scanning = true;
 
             html5QrcodeScanner.start(
                 { facingMode: "environment" },
-                { fps: 10, qrbox: { width: 250, height: 250 }, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 250 },
+                    experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+                },
                 (decodedText, decodedResult) => {
-                    if (canScan) {
-                        canScan = false;
-
-                        const codeData = {
-                            value: decodedText,
-                            type: decodedResult.result.format.formatName || "unknown"
-                        };
-
+                    if (scanning) {
+                        scanning = false; // обработка только одного кадра за раз
+                        const codeData = { value: decodedText, type: decodedResult.result.format.formatName || "unknown" };
+                        // проверяем, есть ли уже такой код
                         if (!scannedCodes.some(c => c.value === codeData.value)) {
                             scannedCodes.push(codeData);
                             localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
                             renderTable();
-
-                            // Показать toast
-                            toastBody.textContent = `Код "${codeData.value}" добавлен!`;
-                            toast.show();
                         }
-
-                        // Пауза 1.5 секунды перед следующим сканом
-                        setTimeout(() => { canScan = true; }, 1500);
+                        // разрешаем следующий скан через 1 сек
+                        setTimeout(() => { scanning = true; }, 1000);
                     }
                 },
-                (errorMessage) => { /* мелкие ошибки игнорируем */ }
+                (errorMessage) => { /* можно игнорировать мелкие ошибки */ }
             ).catch(err => alert("Не удалось получить доступ к камере: " + err));
 
             renderTable();
