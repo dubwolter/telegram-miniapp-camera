@@ -69,7 +69,7 @@
                 white-space: nowrap;
             }
 
-        #clearAllBtn {
+        #clearAllBtn, #downloadAllBtn {
             margin-top: 10px;
         }
 
@@ -132,6 +132,44 @@
         </div>
     </div>
 
+    <!-- Модальное окно подтверждения очистки -->
+    <div class="modal fade" id="confirmClearModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Очистить таблицу?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    Вы уверены, что хотите удалить все отсканированные коды?
+                </div>
+                <div class="modal-footer">
+                    <button id="cancelClearBtn" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button id="confirmClearBtn" class="btn btn-danger">Очистить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно подтверждения удаления одной строки -->
+    <div class="modal fade" id="confirmDeleteModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Удалить код?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="deleteModalBody">
+                    <!-- Здесь будет текст с кодом -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button id="confirmDeleteBtn" class="btn btn-danger">Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast уведомление -->
     <div class="toast-container">
         <div id="addToast" class="toast align-items-center text-bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
@@ -159,6 +197,15 @@
         const saveAsCodeBtn = document.getElementById('saveAsCodeBtn');
         const codePreview = document.getElementById('codePreview');
 
+        const confirmClearModalEl = document.getElementById("confirmClearModal");
+        const confirmClearModal = new bootstrap.Modal(confirmClearModalEl);
+        const confirmClearBtn = document.getElementById("confirmClearBtn");
+
+        const confirmDeleteModalEl = document.getElementById("confirmDeleteModal");
+        const confirmDeleteModal = new bootstrap.Modal(confirmDeleteModalEl);
+        const deleteModalBody = document.getElementById("deleteModalBody");
+        let deleteIndex = null;
+
         let scannedCodes = JSON.parse(localStorage.getItem("scannedCodes") || "[]");
         let pendingCode = null;
         let canScan = true;
@@ -179,15 +226,7 @@
                 tableBody.appendChild(tr);
             });
 
-            document.querySelectorAll(".delete-btn").forEach(btn => {
-                btn.addEventListener("click", () => {
-                    const idx = btn.getAttribute("data-index");
-                    scannedCodes.splice(idx, 1);
-                    localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
-                    renderTable();
-                });
-            });
-
+            // Настраиваем кнопки копирования
             document.querySelectorAll(".copy-btn").forEach(btn => {
                 btn.addEventListener("click", async () => {
                     const idx = btn.getAttribute("data-index");
@@ -198,13 +237,33 @@
                     } catch (err) { console.error(err); }
                 });
             });
+
+            // Настраиваем кнопки удаления (открытие модального)
+            document.querySelectorAll(".delete-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    deleteIndex = btn.getAttribute("data-index");
+                    deleteModalBody.textContent = `Вы уверены, что хотите удалить код "${scannedCodes[deleteIndex].value}"?`;
+                    confirmDeleteModal.show();
+                });
+            });
         }
 
-        clearAllBtn.addEventListener("click", () => {
-            if (confirm("Очистить всю таблицу?")) {
-                scannedCodes = [];
-                localStorage.removeItem("scannedCodes");
+        clearAllBtn.onclick = () => confirmClearModal.show();
+        confirmClearBtn.onclick = () => {
+            scannedCodes = [];
+            localStorage.removeItem("scannedCodes");
+            renderTable();
+            confirmClearModal.hide();
+        };
+
+        // Удаление конкретной строки после подтверждения
+        document.getElementById("confirmDeleteBtn").addEventListener("click", () => {
+            if (deleteIndex !== null) {
+                scannedCodes.splice(deleteIndex, 1);
+                localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
                 renderTable();
+                confirmDeleteModal.hide();
+                deleteIndex = null;
             }
         });
 
@@ -237,28 +296,18 @@
             }
         });
 
-        addCodeModalEl.addEventListener('shown.bs.modal', () => {
-            codeNameInput.focus();
-        });
-
-        addCodeModalEl.addEventListener('hidden.bs.modal', () => {
-            pendingCode = null;
-            setTimeout(() => { canScan = true; }, 1000);
-        });
+        addCodeModalEl.addEventListener('shown.bs.modal', () => codeNameInput.focus());
+        addCodeModalEl.addEventListener('hidden.bs.modal', () => { pendingCode = null; setTimeout(() => { canScan = true; }, 1000); });
 
         window.addEventListener("load", () => {
             html5QrcodeScanner = new Html5Qrcode("reader");
-
             html5QrcodeScanner.start(
                 { facingMode: "environment" },
                 { fps: 10, qrbox: { width: 250, height: 250 }, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
                 (decodedText, decodedResult) => {
                     if (canScan) {
                         canScan = false;
-                        const codeData = {
-                            value: decodedText,
-                            type: decodedResult.result.format.formatName || "unknown"
-                        };
+                        const codeData = { value: decodedText, type: decodedResult.result.format.formatName || "unknown" };
                         if (!scannedCodes.some(c => c.value === codeData.value)) {
                             pendingCode = codeData;
                             scannedValueInput.value = codeData.value;
@@ -266,7 +315,7 @@
                             updateModalCodePreview(codeData.value);
                             addCodeModal.show();
                         } else {
-                            toastBody.textContent = `Код "${pendingCode.value}" уже был добавлен!`;
+                            toastBody.textContent = `Код "${codeData.value}" уже был добавлен!`;
                             toast.show();
                             setTimeout(() => { canScan = true; }, 1500);
                         }
