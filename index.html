@@ -6,23 +6,15 @@
 <title>MiniApp Barcode Scanner</title>
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
-  #scanner-container {
-    width: 100%;
-    max-width: 500px;
-    margin: auto;
-  }
-  video, canvas {
-    width: 100%;
-  }
+  #scanner-container { width: 100%; max-width: 500px; margin: auto; }
+  video, canvas { width: 100%; }
   ul { max-height: 200px; overflow-y: auto; }
 </style>
 </head>
 <body class="p-3">
 <div class="container text-center">
   <h3>Barcode Scanner MiniApp</h3>
-  <div id="scanner-container">
-    <div id="scanner"></div>
-  </div>
+  <div id="scanner-container"><div id="scanner"></div></div>
   <button id="start-btn" class="btn btn-primary mt-3">Start Scanning</button>
   <h5 class="mt-4">Scanned Codes:</h5>
   <ul id="codes-list" class="list-group"></ul>
@@ -33,8 +25,8 @@
 const codesList = document.getElementById('codes-list');
 const startBtn = document.getElementById('start-btn');
 const savedCodes = JSON.parse(localStorage.getItem('scannedCodes') || '[]');
+const cameraAllowed = localStorage.getItem('cameraAllowed') === 'true';
 
-// Функция для отображения сохранённых штрихкодов
 function renderCodes() {
     codesList.innerHTML = '';
     savedCodes.forEach(code => {
@@ -45,7 +37,6 @@ function renderCodes() {
     });
 }
 
-// Добавление нового штрихкода в список и localStorage
 function addCode(code) {
     if (!savedCodes.includes(code)) {
         savedCodes.push(code);
@@ -54,42 +45,49 @@ function addCode(code) {
     }
 }
 
-// Инициализация QuaggaJS
 function startScanner() {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        Quagga.init({
-            inputStream : {
-              name : "Live",
-              type : "LiveStream",
-              target: document.querySelector('#scanner'),
-              constraints: {
-                facingMode: "environment"
-              },
-            },
-            decoder : {
-              readers : ["code_128_reader", "ean_reader", "ean_8_reader", "code_39_reader", "upc_reader", "upc_e_reader"]
-            }
-        }, function(err) {
-            if (err) {
-                console.error(err);
-                alert("Camera not accessible!");
-                return;
+    Quagga.init({
+        inputStream : {
+          name : "Live",
+          type : "LiveStream",
+          target: document.querySelector('#scanner'),
+          constraints: { facingMode: "environment" },
+        },
+        decoder : {
+          readers : ["code_128_reader","ean_reader","ean_8_reader","code_39_reader","upc_reader","upc_e_reader"]
+        }
+    }, function(err) {
+        if (err) {
+            console.error(err);
+            alert("Camera not accessible!");
+            return;
+        }
+        Quagga.start();
+        localStorage.setItem('cameraAllowed', 'true');
+    });
+
+    Quagga.onDetected(data => {
+        const code = data.codeResult.code;
+        if (!savedCodes.includes(code)) {
+            Quagga.pause(); // остановим на момент подтверждения
+            if (confirm("Сохранить код: " + code + " ?")) {
+                addCode(code);
             }
             Quagga.start();
-        });
-
-        Quagga.onDetected(data => {
-            addCode(data.codeResult.code);
-        });
-    } else {
-        alert("Camera not supported on this device.");
-    }
+        }
+    });
 }
 
-startBtn.addEventListener('click', () => {
-    startBtn.disabled = true;
+// Если камера уже разрешена, запускаем сразу
+if (cameraAllowed) {
+    startBtn.style.display = 'none';
     startScanner();
-});
+} else {
+    startBtn.addEventListener('click', () => {
+        startBtn.disabled = true;
+        startScanner();
+    });
+}
 
 // Отобразить уже сохранённые штрихкоды при загрузке
 renderCodes();
