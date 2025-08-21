@@ -96,7 +96,7 @@
                 <thead class="table-primary">
                     <tr>
                         <th>Значение</th>
-                        <th>Название</th>
+                        <th>Имя/Описание</th>
                         <th>Тип кода</th>
                         <th>Действия</th>
                     </tr>
@@ -106,6 +106,7 @@
         </div>
 
         <button class="btn btn-danger mt-2" id="clearAllBtn"><i class="bi bi-trash"></i> Очистить таблицу</button>
+        <button class="btn btn-success mt-2" id="downloadAllBtn"><i class="bi bi-download"></i> Выгрузить таблицу</button>
     </div>
 
     <!-- Modal для добавления имени к коду -->
@@ -119,13 +120,13 @@
                 <div class="modal-body">
                     <p>Значение сканированного кода:</p>
                     <input type="text" class="form-control mb-2" id="scannedValue" readonly>
-                    <label for="codeName">Имя/Описание:</label>
+                    <label for="codeName">Описание:</label>
                     <input type="text" class="form-control" id="codeName" placeholder="Введите имя">
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
-                    <button type="button" class="btn btn-primary" id="saveCodeBtn">Сохранить</button>
                     <button type="button" class="btn btn-success" id="saveAsCodeBtn">Сохранить как <span id="codePreview"></span></button>
+                    <button type="button" class="btn btn-primary" id="saveCodeBtn">Сохранить</button>
                 </div>
             </div>
         </div>
@@ -160,6 +161,8 @@
 
         let scannedCodes = JSON.parse(localStorage.getItem("scannedCodes") || "[]");
         let pendingCode = null;
+        let canScan = true;
+        let html5QrcodeScanner;
 
         function renderTable() {
             tableBody.innerHTML = "";
@@ -214,10 +217,10 @@
                 localStorage.setItem("scannedCodes", JSON.stringify(scannedCodes));
                 renderTable();
                 addCodeModal.hide();
-                codeNameInput.value = "";
                 toastBody.textContent = `Код "${pendingCode.value}" добавлен!`;
                 toast.show();
                 pendingCode = null;
+                setTimeout(() => { canScan = true; }, 1000);
             }
         });
 
@@ -230,16 +233,21 @@
                 toastBody.textContent = `Код "${pendingCode.value}" добавлен!`;
                 toast.show();
                 pendingCode = null;
+                setTimeout(() => { canScan = true; }, 1000);
             }
         });
 
         addCodeModalEl.addEventListener('shown.bs.modal', () => {
-            codeNameInput.focus(); // фокус на поле ввода
+            codeNameInput.focus();
+        });
+
+        addCodeModalEl.addEventListener('hidden.bs.modal', () => {
+            pendingCode = null;
+            setTimeout(() => { canScan = true; }, 1000);
         });
 
         window.addEventListener("load", () => {
-            const html5QrcodeScanner = new Html5Qrcode("reader");
-            let canScan = true;
+            html5QrcodeScanner = new Html5Qrcode("reader");
 
             html5QrcodeScanner.start(
                 { facingMode: "environment" },
@@ -251,21 +259,17 @@
                             value: decodedText,
                             type: decodedResult.result.format.formatName || "unknown"
                         };
-
                         if (!scannedCodes.some(c => c.value === codeData.value)) {
-
                             pendingCode = codeData;
                             scannedValueInput.value = codeData.value;
                             codeNameInput.value = "";
                             updateModalCodePreview(codeData.value);
                             addCodeModal.show();
-                        }
-                        else {
-                            toastBody.textContent = `Код "${codeData.value}" уже добавлен!`;
+                        } else {
+                            toastBody.textContent = `Код "${pendingCode.value}" уже был добавлен!`;
                             toast.show();
+                            setTimeout(() => { canScan = true; }, 1500);
                         }
-
-                        setTimeout(() => { canScan = true; }, 1500);
                     }
                 },
                 (errorMessage) => { }
